@@ -10,7 +10,7 @@ using System.Windows.Forms;
 /// </summary>
 public static class Cache
 {
-    public enum Priority { Realtime = 0, Normal = 1 }
+    public enum Priority { Realtime = 0, Normal = 1, Low = 2, Never = 3 }
     public class PopupInfo
     {
         public PopupInfo(Priority priority = Priority.Normal)
@@ -67,21 +67,21 @@ public static class Cache
         #endregion
     }
     /// <summary>
-    /// All rawMatches passed to GetModifiedScoresAndQueue
+    /// All rawMatches (with StartTime) passed to Update(data)
     /// </summary>
     private static Dictionary<string, RawMatch> _Data = new Dictionary<string, RawMatch>();
     /// <summary>
-    /// Low priority queue
+    /// Queue of rawMatches, waiting to be uploaded
     /// </summary>
-    private static Dictionary<string, RawMatch> _Queue = new Dictionary<string, RawMatch>();
+    private static Queue<RawMatch> _Queue = new Queue<RawMatch>();
     /// <summary>
     /// Info from popup
     /// </summary>
     public static Dictionary<string, PopupInfo> Popups = new Dictionary<string, PopupInfo>();
     /// <summary>
-    /// High Priority Updates. Get score modifications and queue the rest of modifications. In every call cache is reset.
+    /// Update cache
     /// </summary>
-    public static List<RawMatch[]> GetModifiedScoresAndQueue(Dictionary<string, RawMatch> data, int chunkSize = 20)
+    public static void Update(Dictionary<string, RawMatch> data)
     {
         // Add time & details to rawMatches from popups, schedule popup's reading.
         foreach (var item in data)
@@ -109,8 +109,6 @@ public static class Cache
         }
         // Filter matches with empty time (we don't post matches with empty time)
         var filter = data.Where(x => x.Value.HasTime()).ToDictionary(k => k.Key, v => v.Value);
-        // Separate realtime & normal priority updates
-        var realtime = new List<RawMatch>();
         foreach (var item in filter)
         {
             var rawMatchNew = item.Value;
@@ -118,39 +116,57 @@ public static class Cache
             // Realtime updates
             if (rawMatchOld == null || rawMatchNew.IsModifiedScore(rawMatchOld))
             {
-                realtime.Add(rawMatchNew);
+                _Queue.Enqueue(rawMatchNew);
                 // Read popup again, immediately
                 if (rawMatchOld != null && Popups.ContainsKey(item.Key))
                 {
                     Popups[item.Key].Priority = Priority.Realtime;
                 }
-                // Realtime updates must not be in normal updates
-                if (_Queue.ContainsKey(item.Key)) _Queue.Remove(item.Key);
             }
             // Normal updates
             else if (rawMatchNew.IsModifiedInfo(rawMatchOld))
             {
-                _Queue[item.Key] = rawMatchNew;
+                _Queue.Enqueue(rawMatchNew);
             }
         }
-        // Reset
+        // Remove popups not exists in data
+        foreach (var key in Popups.Keys.ToArray())
+        {
+            if (!data.ContainsKey(key))
+            {
+                Popups.Remove(key);
+            }
+        }
+        // Reset data
         _Data = filter;
-        // Return
-        return Chunks(realtime, chunkSize);
     }
     /// <summary>
-    /// Low Priority Updates.
+    /// Dequeue a chunk from the begining of queue.
     /// </summary>
-    public static List<RawMatch[]> GetQueue(int chunkSize = 30)
+    public static RawMatch[] DequeueChunk(int chunkSize = 30)
     {
-        var list = new List<RawMatch>();
+        var chunk = new List<RawMatch>();
         while (_Queue.Count > 0)
         {
-            var item = _Queue.First();
-            _Queue.Remove(item.Key);
-            list.Add(item.Value);
+            var item = _Queue.Dequeue();
+            chunk.Add(item);
+            if (chunk.Count >= chunkSize) break;
         }
-        return Chunks(list, chunkSize);
+        return chunk.ToArray();
+    }
+    /// <summary>
+    /// Enqueue a chunk again to the end of queue, after a failed post. Checks if a newer item has been enqueued already.
+    /// </summary>
+    public static void EnqueueChunk(RawMatch[] chunk)
+    {
+        foreach (var item in chunk)
+        {
+            // Ensure not enqueued newer
+            if (!_Queue.Any(x => x.WebId == item.WebId))
+            {
+                _Queue.Enqueue(item);
+            }
+        }
     }
     /// <summary>
     /// 
@@ -158,7 +174,7 @@ public static class Cache
     public static List<T[]> Chunks<T>(List<T> list, int size)
     {
         var result = new List<T[]>();
-        var items = new Queue<T>(list);
+        var items = new Queue<T>(list.ToArray());
         while (items.Count > 0)
         {
             var chunk = new List<T>();
@@ -171,6 +187,9 @@ public static class Cache
         }
         return result;
     }
+    /// <summary>
+    /// 
+    /// </summary>
     public static string Filepath
     {
         get
@@ -183,6 +202,9 @@ public static class Cache
             return path;
         }
     }
+    /// <summary>
+    /// 
+    /// </summary>
     public static void Save()
     {
         try
@@ -192,6 +214,9 @@ public static class Cache
         }
         catch { }
     }
+    /// <summary>
+    /// 
+    /// </summary>
     public static void Restore()
     {
         try

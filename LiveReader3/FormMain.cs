@@ -20,7 +20,7 @@ namespace LiveReader3
         private bool allowExit = false;
         public FormMain()
         {
-            Cache.Restore();
+            //Cache.Restore();
             this.InitializeComponent();
             this.InitializeForm();
             this.InitializeMenu();
@@ -93,6 +93,9 @@ namespace LiveReader3
                 }
             };
         }
+        /// <summary>
+        /// Realtime + Normal Workers
+        /// </summary>
         private void InitializeBrowser()
         {
             this.browser = new ChromiumWebBrowser(URL)
@@ -111,24 +114,21 @@ namespace LiveReader3
             {
                 this.Invoke(new Action(() =>
                 {
-                    if (!this.workerRealtime.IsBusy && !e.IsLoading)
+                    if (!this.workerMatches.IsBusy && !e.IsLoading)
                     {
-                        this.workerRealtime.RunWorkerAsync();
+                        this.workerMatches.RunWorkerAsync();
                     }
-                    if (!this.workerNormal.IsBusy && !e.IsLoading)
+                    if (!this.workerUploads.IsBusy && !e.IsLoading)
                     {
-                        this.workerNormal.RunWorkerAsync();
+                        this.workerUploads.RunWorkerAsync();
                     }
                 }));
             };
             this.browser.LoadError += (sender, e) =>
             {
-                this.Invoke(new Action(() =>
-                {
-
-                }));
+                this.WriteLog($"Browser LoadError: {e.ErrorText}");
             };
-            this.workerRealtime.DoWork += (sender, e) =>
+            this.workerMatches.DoWork += (sender, e) =>
             {
                 // Delay start
                 this.WriteStatus($"Starting...");
@@ -141,22 +141,12 @@ namespace LiveReader3
                     var task = this.browser.EvaluateScriptAsync(script);
                     task.Wait();
                     var response = task.Result;
-                    if (response.Success)
+                    if (response.Success && response.Result != null)
                     {
-                        if (response.Result != null)
-                        {
-                            var result = (string)response.Result;
-                            var data = RawMatch.ParseData(result);
-                            this.WriteStatus($"Found {data.Values.Count} matches [{((DateTime.Now - time).TotalMilliseconds):#,##0}ms]");
-                            // Update
-                            var chunks = Cache.GetModifiedScoresAndQueue(data);
-                            foreach (var chunk in chunks)
-                            {
-                                var t = DateTime.Now;
-                                RawMatch.Post(this.WriteRealtimeLog, chunk);
-                                this.WriteLog($"Posted {chunk.Length} priority update(s) [{((DateTime.Now - t).TotalMilliseconds):#,##0}ms]");
-                            }
-                        }
+                        var result = (string)response.Result;
+                        var data = RawMatch.ParseData(result);
+                        this.WriteStatus($"Found {data.Values.Count} matches [{((DateTime.Now - time).TotalMilliseconds):#,##0}ms]");
+                        Cache.Update(data);
                     }
                     else
                     {
@@ -165,21 +155,34 @@ namespace LiveReader3
                     System.Threading.Thread.Sleep(1000);
                 }
             };
-            this.workerNormal.DoWork += (sender, e) =>
+            this.workerUploads.DoWork += (sender, e) =>
             {
                 while (true)
                 {
-                    var chunks = Cache.GetQueue();
-                    foreach (var chunk in chunks)
+                    var chunk = Cache.DequeueChunk();
+                    if (chunk.Length > 0)
                     {
                         var t = DateTime.Now;
-                        RawMatch.Post(this.WriteNormalLog, chunk);
-                        this.WriteLog($"Posted {chunk.Length} info update(s) [{((DateTime.Now - t).TotalMilliseconds):#,##0}ms]");
+                        if (RawMatch.Post(this.WriteUploadLog, chunk))
+                        {
+                            this.WriteLog($"Posted {chunk.Length} update(s) [{((DateTime.Now - t).TotalMilliseconds):#,##0}ms]");
+                        }
+                        else
+                        {
+                            this.WriteLog($"Error on posting {chunk.Length} update(s) [{((DateTime.Now - t).TotalMilliseconds):#,##0}ms]");
+                            Cache.EnqueueChunk(chunk);
+                        }
                     }
-                    System.Threading.Thread.Sleep(30 * 1000);
+                    else
+                    {
+                        System.Threading.Thread.Sleep(200);
+                    }
                 }
             };
         }
+        /// <summary>
+        /// Popup Worker
+        /// </summary>
         private void InitializePopup()
         {
             this.popup = new ChromiumWebBrowser(URL)
@@ -198,9 +201,9 @@ namespace LiveReader3
             {
                 this.Invoke(new Action(() =>
                 {
-                    if (!this.workerPopup.IsBusy && !e.IsLoading)
+                    if (!this.workerPopups.IsBusy && !e.IsLoading)
                     {
-                        this.workerPopup.RunWorkerAsync();
+                        this.workerPopups.RunWorkerAsync();
                     }
                 }));
             };
@@ -211,7 +214,7 @@ namespace LiveReader3
 
                 }));
             };
-            this.workerPopup.DoWork += (sender, e) =>
+            this.workerPopups.DoWork += (sender, e) =>
             {
                 var wait = 2 * 1000; // Miliseconds
                 var refresh = 60; // Minutes
@@ -228,7 +231,7 @@ namespace LiveReader3
                             {
                                 this.WritePopupLog($"Popup read success [Realtime] => Key: {item.Key}, Length: {info.JsonData.Length}, StartTime: {info.StartTime}");
                                 Cache.Popups[item.Key] = info;
-                                Cache.Save();
+                                //Cache.Save();
                                 this.UpdatePopupStatus();
                             }
                         }
@@ -245,7 +248,7 @@ namespace LiveReader3
                             {
                                 this.WritePopupLog($"Popup read success [Normal] => Key: {item.Key}, Length: {info.JsonData.Length}, StartTime: {info.StartTime}");
                                 Cache.Popups[item.Key] = info;
-                                Cache.Save();
+                                //Cache.Save();
                             }
                         }
                     }
@@ -295,13 +298,9 @@ namespace LiveReader3
         {
             this.WriteLog(this.listBrowserLog, message, limit);
         }
-        private void WriteRealtimeLog(string[] messages, int limit = 9999)
+        private void WriteUploadLog(string[] messages, int limit = 9999)
         {
-            this.WriteLog(this.listRealtimeLog, messages, limit);
-        }
-        private void WriteNormalLog(string[] messages, int limit = 9999)
-        {
-            this.WriteLog(this.listNormalLog, messages, limit);
+            this.WriteLog(this.listUploadLog, messages, limit);
         }
         private void WritePopupLog(string message, int limit = 9999)
         {

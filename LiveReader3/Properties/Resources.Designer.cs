@@ -61,8 +61,8 @@ namespace LiveReader3.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to (function () {
-        ///    function Text(element) {
+        ///   Looks up a localized string similar to (() =&gt; {
+        ///    const Text = (element) =&gt; {
         ///        let txt = &quot;&quot;;
         ///        if (element !== null) {
         ///            element.childNodes.forEach(function myFunction(node) {
@@ -73,7 +73,7 @@ namespace LiveReader3.Properties {
         ///        }
         ///        return txt.replace(/\s+/g, &apos; &apos;).trim();
         ///    }
-        ///    function TextAll(element) {
+        ///    const TextAll = (element) =&gt; {
         ///        let txt = (element === null) ? &quot;&quot; : element.textContent;
         ///        return (txt === null) ? &quot;&quot; [rest of string was truncated]&quot;;.
         /// </summary>
@@ -84,11 +84,22 @@ namespace LiveReader3.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to (function () {
-        ///    let data;
-        ///
-        ///    return JSON.stringify(data);
-        ///})();.
+        ///   Looks up a localized string similar to (() =&gt; {
+        ///    /** Delete empty fields from object */
+        ///    const removeEmpty = (o) =&gt; {
+        ///        Object.keys(o).forEach(k =&gt; !o[k] ? delete o[k] : {});
+        ///        return o;
+        ///    }
+        ///    /** Convert all whitespace to sigle-space */
+        ///    const textLine = (text) =&gt; {
+        ///        return text?.replace(/\s/g, &apos; &apos;).replace(/\s{2,}/g, &apos; &apos;).trim() || &apos;&apos;;
+        ///    }
+        ///    /** Remove all whitespace */
+        ///    const textSolid = (text) =&gt; {
+        ///        return text?.replace(/\s/g, &apos;&apos;) || &apos;&apos;;
+        ///    }
+        ///    /** Match start time */
+        ///    const  [rest of string was truncated]&quot;;.
         /// </summary>
         internal static string FlashScorePopup {
             get {

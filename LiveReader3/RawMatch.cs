@@ -97,7 +97,7 @@ public class RawMatch
         if (this.StartTime.Length <= 15) return false;
         return true;
     }
-    public static void Post(WriteLog log, params RawMatch[] rawMatches)
+    public static bool Post(WriteLog log, params RawMatch[] rawMatches)
     {
         var url = "https://europe-west1-play90.cloudfunctions.net/updateRawMatches";
         var list = new List<object>();
@@ -130,9 +130,11 @@ public class RawMatch
         var json = JsonConvert.SerializeObject(list.ToArray());
         data["json"] = json;
         var bytes = TimedWebClient.PostData(data, url);
+        if (bytes == null) return false;
         var text = Encoding.UTF8.GetString(bytes);
         var results = JsonConvert.DeserializeObject<string[]>(text);
         log(results);
+        return true;
     }
     public static Task PostAsync(WriteLog log, params RawMatch[] rawMatches)
     {
