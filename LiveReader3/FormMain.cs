@@ -55,7 +55,7 @@ namespace LiveReader3
                     e.Cancel = true;
                 }
             };
-
+            this.labelVersion.Text = this.Version;
         }
         private void InitializeMenu()
         {
@@ -366,6 +366,14 @@ namespace LiveReader3
         public static TimeSpan TimeDiff(string s)
         {
             return TimeDiff(DateTime.Parse(s));
+        }
+        private string Version
+        {
+            get
+            {
+                var version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                return $"v{version.Major}.{version.Minor}.{version.Build}";
+            }
         }
     }
 }
