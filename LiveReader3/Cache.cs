@@ -10,7 +10,7 @@ using System.Windows.Forms;
 /// </summary>
 public static class Cache
 {
-    public enum Priority { Realtime = 0, Normal = 1, Low = 2, Never = 3 }
+    public enum Priority { Realtime = 0, Normal = 1, Low = 2 }
     public class PopupInfo
     {
         public PopupInfo(Priority priority = Priority.Normal)
@@ -46,6 +46,7 @@ public static class Cache
                     case "Postponed":
                     case "Cancelled":
                     case "Finished":
+                    case "AFTER EXTRA TIME":
                         return false;
                     default:
                         return true;

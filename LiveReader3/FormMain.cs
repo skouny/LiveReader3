@@ -217,43 +217,41 @@ namespace LiveReader3
             this.workerPopups.DoWork += (sender, e) =>
             {
                 var wait = 2 * 1000; // Miliseconds
-                var refresh = 60; // Minutes
+                var i = 0;
                 while (true)
                 {
-                    // Realtime
-                    var queryRealtime = Cache.Popups.Where(x => x.Value.Priority == Cache.Priority.Realtime).OrderBy(x => x.Value.Updated).ToArray();
-                    if (queryRealtime.Length > 0)
+                    // Realtime (score changed or unread)
+                    var priority = Cache.Priority.Realtime;
+                    var query = Cache.Popups.Where(x => x.Value.Priority == priority).OrderBy(x => x.Value.Updated).ToArray();
+                    // Normal (is live)
+                    if (query.Length == 0 && i < 3) // <= read 3 normal and 1 low
                     {
-                        foreach (var item in queryRealtime)
+                        priority = Cache.Priority.Normal;
+                        query = Cache.Popups.Where(x => x.Value.Priority == priority && x.Value.Active && TimeDiff(x.Value.Updated).TotalMinutes >= 1).OrderBy(x => x.Value.Updated).ToArray();
+                        i++;
+                    }
+                    // Low (not started)
+                    if (query.Length == 0)
+                    {
+                        priority = Cache.Priority.Low;
+                        query = Cache.Popups.Where(x => x.Value.Priority == priority && x.Value.Active && TimeDiff(x.Value.Updated).TotalHours >= 1).OrderBy(x => x.Value.Updated).ToArray();
+                        i = 0;
+                    }
+                    // Read
+                    if (query.Length > 0)
+                    {
+                        var item = query[0];
+                        var info = this.ReadPopup(item.Key, wait);
+                        if (info != null)
                         {
-                            var info = this.ReadPopup(item.Key, wait);
-                            if (info != null)
-                            {
-                                this.WritePopupLog($"Popup read success [Realtime] => Key: {item.Key}, Length: {info.JsonData.Length}, StartTime: {info.StartTime}");
-                                Cache.Popups[item.Key] = info;
-                                //Cache.Save();
-                                this.UpdatePopupStatus();
-                            }
+                            this.WritePopupLog($"Popup read success [{priority}] => Key: {item.Key}, Length: {info.JsonData.Length}, StartTime: {info.StartTime}");
+                            Cache.Popups[item.Key] = info;
+                            this.UpdatePopupStatus();
+                            //Cache.Save();
+                            continue;
                         }
                     }
-                    else
-                    {
-                        // Normal
-                        var queryNormal = Cache.Popups.Where(x => x.Value.Priority == Cache.Priority.Normal && x.Value.Active && (DateTime.Now - x.Value.Updated).TotalMinutes > refresh).OrderBy(x => x.Value.Updated).ToArray();
-                        if (queryNormal.Length > 0)
-                        {
-                            var item = queryNormal[0];
-                            var info = this.ReadPopup(item.Key, wait);
-                            if (info != null)
-                            {
-                                this.WritePopupLog($"Popup read success [Normal] => Key: {item.Key}, Length: {info.JsonData.Length}, StartTime: {info.StartTime}");
-                                Cache.Popups[item.Key] = info;
-                                //Cache.Save();
-                            }
-                        }
-                    }
-                    this.UpdatePopupStatus();
-                    // Break
+                    // Break if nothing to do
                     System.Threading.Thread.Sleep(wait);
                 }
             };
@@ -282,6 +280,14 @@ namespace LiveReader3
                     if (json.Length >= minJsonLength)
                     {
                         var info = Cache.PopupInfo.Parse(json);
+                        if (string.IsNullOrWhiteSpace(info.Status))
+                        {
+                            info.Priority = Cache.Priority.Low;
+                        }
+                        else
+                        {
+                            info.Priority = Cache.Priority.Normal;
+                        }
                         return info;
                     }
                 }
@@ -343,12 +349,23 @@ namespace LiveReader3
         private void UpdatePopupStatus()
         {
             var realtime = Cache.Popups.Where(x => x.Value.Priority == Cache.Priority.Realtime).Count();
-            var normal = Cache.Popups.Where(x => x.Value.Priority == Cache.Priority.Normal).Count();
+            var normal = Cache.Popups.Where(x => x.Value.Priority == Cache.Priority.Normal && x.Value.Active).Count();
+            var low = Cache.Popups.Where(x => x.Value.Priority == Cache.Priority.Low && x.Value.Active).Count();
+            var never = Cache.Popups.Where(x => !x.Value.Active).Count();
+            var total = realtime + normal + low + never;
             this.Invoke(new Action(() =>
             {
-                this.labelPopups.Text = $"Popup Cache: Realtime = {realtime}, Normal = {normal}";
+                this.labelPopups.Text = $"Popup Cache: Realtime = {realtime}, Normal = {normal}, Low = {low}, Never = {never} [Total: {total}]";
                 this.labelPopups.ForeColor = Color.Navy;
             }));
+        }
+        public static TimeSpan TimeDiff(DateTime t)
+        {
+            return DateTime.Now - t;
+        }
+        public static TimeSpan TimeDiff(string s)
+        {
+            return TimeDiff(DateTime.Parse(s));
         }
     }
 }
