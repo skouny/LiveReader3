@@ -48,7 +48,7 @@ public class RawMatch
     public string Details;
     #endregion
     #region Methods
-    public delegate void WriteLog(string[] messages, int limit = 9999);
+    public delegate void WriteLog(string[] messages, int limit = 1000);
     public bool IsModifiedScore(RawMatch match)
     {
         var modified = false;

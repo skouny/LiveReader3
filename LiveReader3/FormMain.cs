@@ -300,23 +300,23 @@ namespace LiveReader3
             // Read failure
             return null;
         }
-        private void WriteLog(string message, int limit = 9999)
+        private void WriteLog(string message, int limit = 1000)
         {
             this.WriteLog(this.listBrowserLog, message, limit);
         }
-        private void WriteUploadLog(string[] messages, int limit = 9999)
+        private void WriteUploadLog(string[] messages, int limit = 1000)
         {
             this.WriteLog(this.listUploadLog, messages, limit);
         }
-        private void WritePopupLog(string message, int limit = 9999)
+        private void WritePopupLog(string message, int limit = 1000)
         {
             this.WriteLog(this.listPopupLog, message, limit);
         }
-        private void WriteLog(ListBox listBox, string message, int limit = 9999)
+        private void WriteLog(ListBox listBox, string message, int limit = 1000)
         {
             this.WriteLog(listBox, new string[] { message }, limit);
         }
-        private void WriteLog(ListBox listBox, string[] messages, int limit = 9999)
+        private void WriteLog(ListBox listBox, string[] messages, int limit = 1000)
         {
             this.Invoke(new Action(() =>
             {
@@ -328,10 +328,9 @@ namespace LiveReader3
                         listBox.Items.Insert(0, $"{now}: {message}");
                     }
                 }
-                var count = listBox.Items.Count;
-                while (count > limit)
+                while (listBox.Items.Count > limit)
                 {
-                    listBox.Items.RemoveAt(count - 1);
+                    listBox.Items.RemoveAt(listBox.Items.Count - 1);
                 }
             }));
         }
